@@ -82,17 +82,21 @@ class _ScanScreenState extends State<ScanScreen> {
   bool isScanning = false;
   bool isConnected = false;
 
-  // Pitching settings
-  int pitchingSpeed = 0;
-  int pitchingSpin = 0;
-  int feedRate = 5;
-  int verticalAngle = 15;
-  bool enableFeeder = false;
-  bool enablePitcher = false;
-  bool enablePhysicalInput = false;
+  // Pitching settings with default values
+  int pitchingSpeed = 0; // Default: 0
+  int pitchingSpin = 0; // Default: 0
+  int feedRate = 5; // Default: 5
+  int verticalAngle = 15; // Default: 15
+  bool enableFeeder = false; // Default: false
+  bool enablePitcher = false; // Default: false
+  bool enablePhysicalInput = false; // Default: false
+
+  // Timer to handle subscription timeout
+  Timer? _dataTimeoutTimer;
 
   @override
   void dispose() {
+    _dataTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -138,10 +142,56 @@ class _ScanScreenState extends State<ScanScreen> {
           break;
         }
       }
+      if (targetService != null) break;
     }
 
     if (targetService != null && targetCharacteristic != null) {
       await targetCharacteristic!.setNotifyValue(true);
+      
+      try {
+        // Read initial characteristic value
+        var initialValue = await targetCharacteristic!.read();
+
+        if (initialValue.isNotEmpty && initialValue.length >= 7) {
+          updateValuesFromData(Uint8List.fromList(initialValue));
+        } else {
+          // If initial read fails, retain default values
+          // Optionally, you can show a message or log this event
+          print("Initial read returned empty or insufficient data. Using default values.");
+        }
+      } catch (e) {
+        // Handle read error and retain default values
+        print("Error reading initial characteristic value: $e");
+      }
+
+      // Set up a timeout to use default values if no data is received within 5 seconds
+      _dataTimeoutTimer = Timer(const Duration(seconds: 5), () {
+        setState(() {
+          // Revert to default values
+          pitchingSpeed = 0;
+          pitchingSpin = 0;
+          feedRate = 5;
+          verticalAngle = 15;
+          enableFeeder = false;
+          enablePitcher = false;
+          enablePhysicalInput = false;
+        });
+        print("No data received within timeout. Using default values.");
+      });
+
+      // Subscribe to notifications
+      targetCharacteristic!.value.listen((value) {
+        if (value.isNotEmpty && value.length >= 7) {
+          _dataTimeoutTimer?.cancel(); // Data received, cancel the timeout
+          updateValuesFromData(Uint8List.fromList(value));
+        } else {
+          print("Received empty or insufficient data.");
+        }
+      }).onError((error) {
+        // Handle stream errors
+        print("Error in characteristic stream: $error");
+      });
+
       setState(() {
         connectedDevice = device;
         isConnected = true;
@@ -152,16 +202,37 @@ class _ScanScreenState extends State<ScanScreen> {
         connectedDevice = null;
         isConnected = false;
       });
+      print("Target service or characteristic not found. Device disconnected.");
     }
   }
 
+  void updateValuesFromData(Uint8List data) {
+    // Ensure data has at least 7 bytes
+    if (data.length < 7) {
+      print("Data length is less than expected. Skipping update.");
+      return;
+    }
+
+    setState(() {
+      enablePitcher = data[0] == 1;
+      enableFeeder = data[1] == 1;
+      enablePhysicalInput = data[2] == 1;
+      pitchingSpeed = data[3];
+      pitchingSpin = data[4] - 10;
+      feedRate = data[5];
+      verticalAngle = data[6];
+    });
+  }
+
   void disconnectDevice() async {
+    _dataTimeoutTimer?.cancel(); // Cancel any existing timeout
     if (connectedDevice != null) {
       await connectedDevice!.disconnect();
       setState(() {
         connectedDevice = null;
         isConnected = false;
       });
+      print("Device disconnected.");
     }
   }
 
@@ -176,6 +247,7 @@ class _ScanScreenState extends State<ScanScreen> {
       data[5] = feedRate;
       data[6] = verticalAngle;
       await targetCharacteristic!.write(data);
+      print("Command data written: $data");
     }
   }
 
@@ -199,7 +271,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   );
                 }
                 return ListTile(
-                  title: Text(devicesList[index].name),
+                  title: Text(devicesList[index].name.isNotEmpty ? devicesList[index].name : "Unknown Device"),
                   subtitle: Text(devicesList[index].id.toString()),
                   onTap: () => connectToDevice(devicesList[index]),
                 );
@@ -290,6 +362,7 @@ class _ScanScreenState extends State<ScanScreen> {
               },
             ),
             Text("Vertical Angle: $verticalAngle"),
+            
             // Control Switches
             SwitchListTile(
               title: const Text('Enable Pitcher'),
