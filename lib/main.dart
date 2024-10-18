@@ -279,6 +279,7 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
           if (isConnected) ...[
+            Text("Pitching Speed: $pitchingSpeed"),
             // Pitching Speed Slider
             Slider(
               value: pitchingSpeed.toDouble(),
@@ -298,8 +299,8 @@ class _ScanScreenState extends State<ScanScreen> {
                 writeCommandData();
               },
             ),
-            Text("Pitching Speed: $pitchingSpeed"),
-
+            
+            Text("Pitching Spin: $pitchingSpin"),
             // Pitching Spin Slider
             Slider(
               value: pitchingSpin.toDouble(),
@@ -319,14 +320,14 @@ class _ScanScreenState extends State<ScanScreen> {
                 writeCommandData();
               },
             ),
-            Text("Pitching Spin: $pitchingSpin"),
-
+            
+            Text("Feeder Rate: $feedRate"),
             // Feeder Rate Slider
             Slider(
               value: feedRate.toDouble(),
-              min: 2,
+              min: 1,
               max: 10,
-              divisions: 8,
+              divisions: 9,
               label: feedRate.toString(),
               onChanged: (value) {
                 setState(() {
@@ -340,8 +341,8 @@ class _ScanScreenState extends State<ScanScreen> {
                 writeCommandData();
               },
             ),
-            Text("Feeder Rate: $feedRate"),
-
+            
+            Text("Vertical Angle: $verticalAngle"),
             // Vertical Angle Slider
             Slider(
               value: verticalAngle.toDouble(),
@@ -361,7 +362,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 writeCommandData();
               },
             ),
-            Text("Vertical Angle: $verticalAngle"),
+            
             
             // Control Switches
             SwitchListTile(
