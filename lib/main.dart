@@ -83,7 +83,7 @@ class _ScanScreenState extends State<ScanScreen> {
   bool isConnected = false;
 
   // Pitching settings with default values
-  int pitchingSpeed = 0; // Default: 0
+  int pitchingSpeed = 1; // Default: 1
   int pitchingSpin = 0; // Default: 0
   int feedRate = 5; // Default: 5
   int verticalAngle = 15; // Default: 15
@@ -154,7 +154,7 @@ class _ScanScreenState extends State<ScanScreen> {
         // Read initial characteristic value
         var initialValue = await targetCharacteristic!.read();
 
-        if (initialValue.isNotEmpty && initialValue.length >= 7) {
+        if (initialValue.isNotEmpty && initialValue.length >= 6) {
           updateValuesFromData(Uint8List.fromList(initialValue));
         } else {
           // If initial read fails, retain default values
@@ -174,7 +174,7 @@ class _ScanScreenState extends State<ScanScreen> {
       _dataTimeoutTimer = Timer(const Duration(seconds: 5), () {
         setState(() {
           // Revert to default values
-          pitchingSpeed = 0;
+          pitchingSpeed = 1;
           pitchingSpin = 0;
           feedRate = 5;
           verticalAngle = 15;
@@ -188,7 +188,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
       // Subscribe to notifications
       targetCharacteristic!.lastValueStream.listen((value) {
-        if (value.isNotEmpty && value.length >= 7) {
+        if (value.isNotEmpty && value.length >= 6) {
           _dataTimeoutTimer?.cancel(); // Data received, cancel the timeout
           updateValuesFromData(Uint8List.fromList(value));
         } else {
@@ -203,11 +203,13 @@ class _ScanScreenState extends State<ScanScreen> {
         }
       });
 
-      // Start connection check timer (every 10 seconds)
-      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-        bool isStillConnected = await isDeviceConnected(device);
-        if (!isStillConnected) {
+      // Subscribe to device state changes
+      device.connectionState.listen((BluetoothConnectionState state) {
+        if (state == BluetoothConnectionState.disconnected) {
           disconnectDevice();
+          if (kDebugMode) {
+            print("Device disconnected");
+          }
         }
       });
 
@@ -240,8 +242,8 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   void updateValuesFromData(Uint8List data) {
-    // Ensure data has at least 7 bytes
-    if (data.length < 7) {
+    // Ensure data has at least 6 bytes
+    if (data.length < 6) {
       if (kDebugMode) {
         print("Data length is less than expected. Skipping update.");
       }
@@ -275,7 +277,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   void writeCommandData() async {
     if (targetCharacteristic != null) {
-      Uint8List data = Uint8List(7);
+      Uint8List data = Uint8List(6);
       data[0] = enableLauncher ? 1 : 0;
       data[1] = enablePhysicalInput ? 1 : 0;
       data[2] = pitchingSpeed;
@@ -321,9 +323,9 @@ class _ScanScreenState extends State<ScanScreen> {
             // Pitching Speed Slider
             Slider(
               value: pitchingSpeed.toDouble(),
-              min: 0,
+              min: 1,
               max: 100,
-              divisions: 100,
+              divisions: 99,
               label: pitchingSpeed.toString(),
               onChanged: (value) {
                 setState(() {
