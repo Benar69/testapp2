@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -159,11 +159,15 @@ class _ScanScreenState extends State<ScanScreen> {
         } else {
           // If initial read fails, retain default values
           // Optionally, you can show a message or log this event
-          print("Initial read returned empty or insufficient data. Using default values.");
+          if (kDebugMode) {
+            print("Initial read returned empty or insufficient data. Using default values.");
+          }
         }
       } catch (e) {
         // Handle read error and retain default values
-        print("Error reading initial characteristic value: $e");
+        if (kDebugMode) {
+          print("Error reading initial characteristic value: $e");
+        }
       }
 
       // Set up a timeout to use default values if no data is received within 5 seconds
@@ -177,7 +181,9 @@ class _ScanScreenState extends State<ScanScreen> {
           enableLauncher = false;
           enablePhysicalInput = false;
         });
-        print("No data received within timeout. Using default values.");
+        if (kDebugMode) {
+          print("No data received within timeout. Using default values.");
+        }
       });
 
       // Subscribe to notifications
@@ -186,11 +192,15 @@ class _ScanScreenState extends State<ScanScreen> {
           _dataTimeoutTimer?.cancel(); // Data received, cancel the timeout
           updateValuesFromData(Uint8List.fromList(value));
         } else {
-          print("Received empty or insufficient data.");
+          if (kDebugMode) {
+            print("Received empty or insufficient data.");
+          }
         }
       }).onError((error) {
         // Handle stream errors
-        print("Error in characteristic stream: $error");
+        if (kDebugMode) {
+          print("Error in characteristic stream: $error");
+        }
       });
 
       // Start connection check timer (every 10 seconds)
@@ -211,7 +221,9 @@ class _ScanScreenState extends State<ScanScreen> {
         connectedDevice = null;
         isConnected = false;
       });
-      print("Target service or characteristic not found. Device disconnected.");
+      if (kDebugMode) {
+        print("Target service or characteristic not found. Device disconnected.");
+      }
     }
   }
 
@@ -220,7 +232,9 @@ class _ScanScreenState extends State<ScanScreen> {
     try {
       isConnected = await device.connectionState == BluetoothConnectionState.connected;
     } catch (e) {
-      print("Error checking device connection: $e");
+      if (kDebugMode) {
+        print("Error checking device connection: $e");
+      }
     }
     return isConnected;
   }
@@ -228,7 +242,9 @@ class _ScanScreenState extends State<ScanScreen> {
   void updateValuesFromData(Uint8List data) {
     // Ensure data has at least 7 bytes
     if (data.length < 7) {
-      print("Data length is less than expected. Skipping update.");
+      if (kDebugMode) {
+        print("Data length is less than expected. Skipping update.");
+      }
       return;
     }
 
@@ -251,7 +267,9 @@ class _ScanScreenState extends State<ScanScreen> {
         connectedDevice = null;
         isConnected = false;
       });
-      print("Device disconnected.");
+      if (kDebugMode) {
+        print("Device disconnected.");
+      }
     }
   }
 
@@ -265,7 +283,9 @@ class _ScanScreenState extends State<ScanScreen> {
       data[4] = feedRate;
       data[5] = verticalAngle;
       await targetCharacteristic!.write(data);
-      print("Command data written: $data");
+      if (kDebugMode) {
+        print("Command data written: $data");
+      }
     }
   }
 
@@ -289,8 +309,8 @@ class _ScanScreenState extends State<ScanScreen> {
                   );
                 }
                 return ListTile(
-                  title: Text(devicesList[index].name.isNotEmpty ? devicesList[index].name : "Unknown Device"),
-                  subtitle: Text(devicesList[index].id.toString()),
+                  title: Text(devicesList[index].platformName.isNotEmpty ? devicesList[index].platformName : "Unknown Device"),
+                  subtitle: Text(devicesList[index].remoteId.toString()),
                   onTap: () => connectToDevice(devicesList[index]),
                 );
               },
