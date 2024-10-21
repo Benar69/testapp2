@@ -90,6 +90,7 @@ class _ScanScreenState extends State<ScanScreen> {
   bool enableFeeder = false; // Default: false
   bool enablePitcher = false; // Default: false
   bool enablePhysicalInput = false; // Default: false
+  bool enableFeederPitcher = false; // Default: false
 
   // Timer to handle subscription timeout
   Timer? _dataTimeoutTimer;
@@ -366,7 +367,19 @@ class _ScanScreenState extends State<ScanScreen> {
             
             // Control Switches
             SwitchListTile(
-              title: const Text('Enable Pitcher'),
+              title: const Text('Enable Pitcher and Feeder'),
+              value: enableFeederPitcher,
+              onChanged: (value) {
+                setState(() {
+                  enableFeederPitcher = value;
+                  enableFeeder = enableFeederPitcher;
+                  enablePitcher = enableFeederPitcher;
+                });
+                writeCommandData();
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Enable Pitcher Only'),
               value: enablePitcher,
               onChanged: (value) {
                 setState(() {
@@ -376,7 +389,7 @@ class _ScanScreenState extends State<ScanScreen> {
               },
             ),
             SwitchListTile(
-              title: const Text('Enable Feeder'),
+              title: const Text('Enable Feeder Only'),
               value: enableFeeder,
               onChanged: (value) {
                 setState(() {
