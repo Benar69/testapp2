@@ -92,10 +92,13 @@ class _ScanScreenState extends State<ScanScreen> {
 
   // Timer to handle subscription timeout
   Timer? _dataTimeoutTimer;
+  // Timer to handle connection check
+  Timer? _connectionCheckTimer;
 
   @override
   void dispose() {
     _dataTimeoutTimer?.cancel();
+    _connectionCheckTimer?.cancel();
     super.dispose();
   }
 
@@ -178,7 +181,7 @@ class _ScanScreenState extends State<ScanScreen> {
       });
 
       // Subscribe to notifications
-      targetCharacteristic!.value.listen((value) {
+      targetCharacteristic!.lastValueStream.listen((value) {
         if (value.isNotEmpty && value.length >= 7) {
           _dataTimeoutTimer?.cancel(); // Data received, cancel the timeout
           updateValuesFromData(Uint8List.fromList(value));
@@ -188,6 +191,14 @@ class _ScanScreenState extends State<ScanScreen> {
       }).onError((error) {
         // Handle stream errors
         print("Error in characteristic stream: $error");
+      });
+
+      // Start connection check timer (every 10 seconds)
+      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+        bool isStillConnected = await isDeviceConnected(device);
+        if (!isStillConnected) {
+          disconnectDevice();
+        }
       });
 
       setState(() {
@@ -202,6 +213,16 @@ class _ScanScreenState extends State<ScanScreen> {
       });
       print("Target service or characteristic not found. Device disconnected.");
     }
+  }
+
+  Future<bool> isDeviceConnected(BluetoothDevice device) async {
+    bool isConnected = false;
+    try {
+      isConnected = await device.connectionState == BluetoothConnectionState.connected;
+    } catch (e) {
+      print("Error checking device connection: $e");
+    }
+    return isConnected;
   }
 
   void updateValuesFromData(Uint8List data) {
@@ -223,6 +244,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   void disconnectDevice() async {
     _dataTimeoutTimer?.cancel(); // Cancel any existing timeout
+    _connectionCheckTimer?.cancel();
     if (connectedDevice != null) {
       await connectedDevice!.disconnect();
       setState(() {
