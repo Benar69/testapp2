@@ -87,10 +87,8 @@ class _ScanScreenState extends State<ScanScreen> {
   int pitchingSpin = 0; // Default: 0
   int feedRate = 5; // Default: 5
   int verticalAngle = 15; // Default: 15
-  bool enableFeeder = false; // Default: false
-  bool enablePitcher = false; // Default: false
+  bool enableLauncher = false; // Default: false
   bool enablePhysicalInput = false; // Default: false
-  bool enableFeederPitcher = false; // Default: false
 
   // Timer to handle subscription timeout
   Timer? _dataTimeoutTimer;
@@ -173,8 +171,7 @@ class _ScanScreenState extends State<ScanScreen> {
           pitchingSpin = 0;
           feedRate = 5;
           verticalAngle = 15;
-          enableFeeder = false;
-          enablePitcher = false;
+          enableLauncher = false;
           enablePhysicalInput = false;
         });
         print("No data received within timeout. Using default values.");
@@ -215,13 +212,12 @@ class _ScanScreenState extends State<ScanScreen> {
     }
 
     setState(() {
-      enablePitcher = data[0] == 1;
-      enableFeeder = data[1] == 1;
-      enablePhysicalInput = data[2] == 1;
-      pitchingSpeed = data[3];
-      pitchingSpin = data[4] - 10;
-      feedRate = data[5];
-      verticalAngle = data[6];
+      enableLauncher = data[0] == 1;
+      enablePhysicalInput = data[1] == 1;
+      pitchingSpeed = data[2];
+      pitchingSpin = data[3] - 10;
+      feedRate = data[4];
+      verticalAngle = data[5];
     });
   }
 
@@ -240,13 +236,12 @@ class _ScanScreenState extends State<ScanScreen> {
   void writeCommandData() async {
     if (targetCharacteristic != null) {
       Uint8List data = Uint8List(7);
-      data[0] = enablePitcher ? 1 : 0;
-      data[1] = enableFeeder ? 1 : 0;
-      data[2] = enablePhysicalInput ? 1 : 0;
-      data[3] = pitchingSpeed;
-      data[4] = pitchingSpin + 10;
-      data[5] = feedRate;
-      data[6] = verticalAngle;
+      data[0] = enableLauncher ? 1 : 0;
+      data[1] = enablePhysicalInput ? 1 : 0;
+      data[2] = pitchingSpeed;
+      data[3] = pitchingSpin + 10;
+      data[4] = feedRate;
+      data[5] = verticalAngle;
       await targetCharacteristic!.write(data);
       print("Command data written: $data");
     }
@@ -367,33 +362,11 @@ class _ScanScreenState extends State<ScanScreen> {
             
             // Control Switches
             SwitchListTile(
-              title: const Text('Enable Pitcher and Feeder'),
-              value: enableFeederPitcher,
+              title: const Text('Enable Launcher'),
+              value: enableLauncher,
               onChanged: (value) {
                 setState(() {
-                  enableFeederPitcher = value;
-                  enableFeeder = enableFeederPitcher;
-                  enablePitcher = enableFeederPitcher;
-                });
-                writeCommandData();
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Enable Pitcher Only'),
-              value: enablePitcher,
-              onChanged: (value) {
-                setState(() {
-                  enablePitcher = value;
-                });
-                writeCommandData();
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Enable Feeder Only'),
-              value: enableFeeder,
-              onChanged: (value) {
-                setState(() {
-                  enableFeeder = value;
+                  enableLauncher = value;
                 });
                 writeCommandData();
               },
