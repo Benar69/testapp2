@@ -83,10 +83,11 @@ class _ScanScreenState extends State<ScanScreen> {
   bool isConnected = false;
 
   // Pitching settings with default values
-  int pitchingSpeed = 1; // Default: 1
-  int pitchingSpin = 0; // Default: 0
-  int feedRate = 5; // Default: 5
+  int launcherSpeed = 1; // Default: 1
+  int launcherSpin = 0; // Default: 0
+  int feedDelay = 3; // Default: 3
   int verticalAngle = 15; // Default: 15
+  int presetMode = 0;
   bool enableLauncher = false; // Default: false
   bool enablePhysicalInput = false; // Default: false
 
@@ -174,9 +175,9 @@ class _ScanScreenState extends State<ScanScreen> {
       _dataTimeoutTimer = Timer(const Duration(seconds: 5), () {
         setState(() {
           // Revert to default values
-          pitchingSpeed = 1;
-          pitchingSpin = 0;
-          feedRate = 5;
+          launcherSpeed = 1;
+          launcherSpin = 0;
+          feedDelay = 5;
           verticalAngle = 15;
           enableLauncher = false;
           enablePhysicalInput = false;
@@ -232,7 +233,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<bool> isDeviceConnected(BluetoothDevice device) async {
     bool isConnected = false;
     try {
-      isConnected = await device.connectionState == BluetoothConnectionState.connected;
+      isConnected = device.connectionState == BluetoothConnectionState.connected;
     } catch (e) {
       if (kDebugMode) {
         print("Error checking device connection: $e");
@@ -253,9 +254,9 @@ class _ScanScreenState extends State<ScanScreen> {
     setState(() {
       enableLauncher = data[0] == 1;
       enablePhysicalInput = data[1] == 1;
-      pitchingSpeed = data[2];
-      pitchingSpin = data[3] - 10;
-      feedRate = data[4];
+      launcherSpeed = data[2];
+      launcherSpin = data[3] - 10;
+      feedDelay = data[4];
       verticalAngle = data[5];
     });
   }
@@ -280,9 +281,9 @@ class _ScanScreenState extends State<ScanScreen> {
       Uint8List data = Uint8List(6);
       data[0] = enableLauncher ? 1 : 0;
       data[1] = enablePhysicalInput ? 1 : 0;
-      data[2] = pitchingSpeed;
-      data[3] = pitchingSpin + 10;
-      data[4] = feedRate;
+      data[2] = launcherSpeed;
+      data[3] = launcherSpin + 10;
+      data[4] = feedDelay;
       data[5] = verticalAngle;
       await targetCharacteristic!.write(data);
       if (kDebugMode) {
@@ -319,64 +320,64 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
           if (isConnected) ...[
-            Text("Pitching Speed: $pitchingSpeed"),
+            Text("Pitching Speed: $launcherSpeed"),
             // Pitching Speed Slider
             Slider(
-              value: pitchingSpeed.toDouble(),
+              value: launcherSpeed.toDouble(),
               min: 1,
               max: 100,
               divisions: 99,
-              label: pitchingSpeed.toString(),
+              label: launcherSpeed.toString(),
               onChanged: (value) {
                 setState(() {
-                  pitchingSpeed = value.toInt();
+                  launcherSpeed = value.toInt();
                 });
               },
               onChangeEnd: (value) {
                 setState(() {
-                  pitchingSpeed = value.toInt();
+                  launcherSpeed = value.toInt();
                 });
                 writeCommandData();
               },
             ),
             
-            Text("Pitching Spin: $pitchingSpin"),
+            Text("Pitching Spin: $launcherSpin"),
             // Pitching Spin Slider
             Slider(
-              value: pitchingSpin.toDouble(),
+              value: launcherSpin.toDouble(),
               min: -10,
               max: 10,
               divisions: 20,
-              label: pitchingSpin.toString(),
+              label: launcherSpin.toString(),
               onChanged: (value) {
                 setState(() {
-                  pitchingSpin = value.toInt();
+                  launcherSpin = value.toInt();
                 });
               },
               onChangeEnd: (value) {
                 setState(() {
-                  pitchingSpin = value.toInt();
+                  launcherSpin = value.toInt();
                 });
                 writeCommandData();
               },
             ),
             
-            Text("Feeder Rate: $feedRate"),
+            Text("Feeder Rate: $feedDelay"),
             // Feeder Rate Slider
             Slider(
-              value: feedRate.toDouble(),
+              value: feedDelay.toDouble(),
               min: 1,
               max: 10,
               divisions: 9,
-              label: feedRate.toString(),
+              label: feedDelay.toString(),
               onChanged: (value) {
                 setState(() {
-                  feedRate = value.toInt();
+                  feedDelay = value.toInt();
                 });
               },
               onChangeEnd: (value) {
                 setState(() {
-                  feedRate = value.toInt();
+                  feedDelay = value.toInt();
                 });
                 writeCommandData();
               },
