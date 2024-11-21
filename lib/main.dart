@@ -86,10 +86,9 @@ class _ScanScreenState extends State<ScanScreen> {
   int launcherSpeed = 1; // Default: 1
   int launcherSpin = 0; // Default: 0
   int feedDelay = 3; // Default: 3
-  int verticalAngle = 15; // Default: 15
+  int verticalAngle = 0; // Default: 15
   int presetMode = 0;
   bool enableLauncher = false; // Default: false
-  bool enablePhysicalInput = false; // Default: false
 
   // Timer to handle subscription timeout
   Timer? _dataTimeoutTimer;
@@ -180,7 +179,6 @@ class _ScanScreenState extends State<ScanScreen> {
           feedDelay = 5;
           verticalAngle = 15;
           enableLauncher = false;
-          enablePhysicalInput = false;
         });
         if (kDebugMode) {
           print("No data received within timeout. Using default values.");
@@ -252,12 +250,12 @@ class _ScanScreenState extends State<ScanScreen> {
     }
 
     setState(() {
-      enableLauncher = data[0] == 1;
-      enablePhysicalInput = data[1] == 1;
-      launcherSpeed = data[2];
-      launcherSpin = data[3] - 10;
-      feedDelay = data[4];
-      verticalAngle = data[5];
+      launcherSpeed= data[0];
+      launcherSpin = data[1] - 10;
+      feedDelay = data[2];
+      verticalAngle = data[3];
+      enableLauncher = data[4] == 1;
+      presetMode = data[5];
     });
   }
 
@@ -279,12 +277,12 @@ class _ScanScreenState extends State<ScanScreen> {
   void writeCommandData() async {
     if (targetCharacteristic != null) {
       Uint8List data = Uint8List(6);
-      data[0] = enableLauncher ? 1 : 0;
-      data[1] = enablePhysicalInput ? 1 : 0;
-      data[2] = launcherSpeed;
-      data[3] = launcherSpin + 10;
-      data[4] = feedDelay;
-      data[5] = verticalAngle;
+      data[0] = launcherSpeed;
+      data[1] = launcherSpin + 10;
+      data[2] = feedDelay;
+      data[3] = verticalAngle ;
+      data[4] = enableLauncher ? 1 : 0;
+      data[5] = presetMode;
       await targetCharacteristic!.write(data);
       if (kDebugMode) {
         print("Command data written: $data");
@@ -326,7 +324,7 @@ class _ScanScreenState extends State<ScanScreen> {
               value: launcherSpeed.toDouble(),
               min: 1,
               max: 100,
-              divisions: 99,
+              divisions: 100,
               label: launcherSpeed.toString(),
               onChanged: (value) {
                 setState(() {
@@ -368,7 +366,7 @@ class _ScanScreenState extends State<ScanScreen> {
               value: feedDelay.toDouble(),
               min: 1,
               max: 10,
-              divisions: 9,
+              divisions:10,
               label: feedDelay.toString(),
               onChanged: (value) {
                 setState(() {
@@ -387,8 +385,8 @@ class _ScanScreenState extends State<ScanScreen> {
             // Vertical Angle Slider
             Slider(
               value: verticalAngle.toDouble(),
-              min: 15,
-              max: 50,
+              min: 0,
+              max: 15,
               divisions: 7,
               label: verticalAngle.toString(),
               onChanged: (value) {
@@ -412,16 +410,6 @@ class _ScanScreenState extends State<ScanScreen> {
               onChanged: (value) {
                 setState(() {
                   enableLauncher = value;
-                });
-                writeCommandData();
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Enable Physical Input'),
-              value: enablePhysicalInput,
-              onChanged: (value) {
-                setState(() {
-                  enablePhysicalInput = value;
                 });
                 writeCommandData();
               },
