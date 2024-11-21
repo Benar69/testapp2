@@ -362,7 +362,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 value: feedDelay.toDouble(),
                 min: 1,
                 max: 10,
-                divisions: 10,
+                divisions: 9,
                 label: feedDelay.toString(),
                 onChanged: isConnected
                     ? (value) {
@@ -385,7 +385,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 value: launcherSpeed.toDouble(),
                 min: 1,
                 max: 100,
-                divisions: 100,
+                divisions: 99,
                 label: launcherSpeed.toString(),
                 onChanged: isConnected
                     ? (value) {
