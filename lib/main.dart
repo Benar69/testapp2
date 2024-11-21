@@ -176,9 +176,10 @@ class _ScanScreenState extends State<ScanScreen> {
           // Revert to default values
           launcherSpeed = 1;
           launcherSpin = 0;
-          feedDelay = 5;
-          verticalAngle = 15;
+          feedDelay = 3;
+          verticalAngle = 0;
           enableLauncher = false;
+          presetMode = 0;
         });
         if (kDebugMode) {
           print("No data received within timeout. Using default values.");
@@ -250,7 +251,7 @@ class _ScanScreenState extends State<ScanScreen> {
     }
 
     setState(() {
-      launcherSpeed= data[0];
+      launcherSpeed = data[0];
       launcherSpin = data[1] - 10;
       feedDelay = data[2];
       verticalAngle = data[3];
@@ -280,7 +281,7 @@ class _ScanScreenState extends State<ScanScreen> {
       data[0] = launcherSpeed;
       data[1] = launcherSpin + 10;
       data[2] = feedDelay;
-      data[3] = verticalAngle ;
+      data[3] = verticalAngle;
       data[4] = enableLauncher ? 1 : 0;
       data[5] = presetMode;
       await targetCharacteristic!.write(data);
@@ -310,113 +311,126 @@ class _ScanScreenState extends State<ScanScreen> {
                   );
                 }
                 return ListTile(
-                  title: Text(devicesList[index].platformName.isNotEmpty ? devicesList[index].platformName : "Unknown Device"),
+                  title: Text(devicesList[index].platformName.isNotEmpty
+                      ? devicesList[index].platformName
+                      : "Unknown Device"),
                   subtitle: Text(devicesList[index].remoteId.toString()),
                   onTap: () => connectToDevice(devicesList[index]),
                 );
               },
             ),
           ),
-          if (isConnected) ...[
-            Text("Pitching Speed: $launcherSpeed"),
-            // Pitching Speed Slider
-            Slider(
-              value: launcherSpeed.toDouble(),
-              min: 1,
-              max: 100,
-              divisions: 100,
-              label: launcherSpeed.toString(),
-              onChanged: (value) {
-                setState(() {
-                  launcherSpeed = value.toInt();
-                });
-              },
-              onChangeEnd: (value) {
-                setState(() {
-                  launcherSpeed = value.toInt();
-                });
-                writeCommandData();
-              },
-            ),
-            
-            Text("Pitching Spin: $launcherSpin"),
-            // Pitching Spin Slider
-            Slider(
-              value: launcherSpin.toDouble(),
-              min: -10,
-              max: 10,
-              divisions: 20,
-              label: launcherSpin.toString(),
-              onChanged: (value) {
-                setState(() {
-                  launcherSpin = value.toInt();
-                });
-              },
-              onChangeEnd: (value) {
-                setState(() {
-                  launcherSpin = value.toInt();
-                });
-                writeCommandData();
-              },
-            ),
-            
-            Text("Feeder Rate: $feedDelay"),
-            // Feeder Rate Slider
-            Slider(
-              value: feedDelay.toDouble(),
-              min: 1,
-              max: 10,
-              divisions:10,
-              label: feedDelay.toString(),
-              onChanged: (value) {
-                setState(() {
-                  feedDelay = value.toInt();
-                });
-              },
-              onChangeEnd: (value) {
-                setState(() {
-                  feedDelay = value.toInt();
-                });
-                writeCommandData();
-              },
-            ),
-            
-            Text("Vertical Angle: $verticalAngle"),
-            // Vertical Angle Slider
-            Slider(
-              value: verticalAngle.toDouble(),
-              min: 0,
-              max: 15,
-              divisions: 7,
-              label: verticalAngle.toString(),
-              onChanged: (value) {
-                setState(() {
-                  verticalAngle = value.toInt();
-                });
-              },
-              onChangeEnd: (value) {
-                setState(() {
-                  verticalAngle = value.toInt();
-                });
-                writeCommandData();
-              },
-            ),
-            
-            
-            // Control Switches
-            SwitchListTile(
-              title: const Text('Enable Launcher'),
-              value: enableLauncher,
-              onChanged: (value) {
-                setState(() {
-                  enableLauncher = value;
-                });
-                writeCommandData();
-              },
-            ),
-          ]
+          Column(
+            children: [
+              SwitchListTile(
+                title: const Text('Start Machine'),
+                value: enableLauncher,
+                onChanged: isConnected
+                    ? (value) {
+                        setState(() {
+                          enableLauncher = value;
+                        });
+                        writeCommandData();
+                      }
+                    : null,
+              ),
+              Text("Elevation Pos: $verticalAngle"),
+              Slider(
+                value: verticalAngle.toDouble(),
+                min: 0,
+                max: 15,
+                divisions: 15,
+                label: verticalAngle.toString(),
+                onChanged: isConnected
+                    ? (value) {
+                        setState(() {
+                          verticalAngle = value.toInt();
+                        });
+                      }
+                    : null,
+                onChangeEnd: isConnected
+                    ? (value) {
+                        setState(() {
+                          verticalAngle = value.toInt();
+                        });
+                        writeCommandData();
+                      }
+                    : null,
+              ),
+              Text("Frequency: $feedDelay Sec"),
+              Slider(
+                value: feedDelay.toDouble(),
+                min: 1,
+                max: 10,
+                divisions: 10,
+                label: feedDelay.toString(),
+                onChanged: isConnected
+                    ? (value) {
+                        setState(() {
+                          feedDelay = value.toInt();
+                        });
+                      }
+                    : null,
+                onChangeEnd: isConnected
+                    ? (value) {
+                        setState(() {
+                          feedDelay = value.toInt();
+                        });
+                        writeCommandData();
+                      }
+                    : null,
+              ),
+              Text("Speed: $launcherSpeed%"),
+              Slider(
+                value: launcherSpeed.toDouble(),
+                min: 1,
+                max: 100,
+                divisions: 100,
+                label: launcherSpeed.toString(),
+                onChanged: isConnected
+                    ? (value) {
+                        setState(() {
+                          launcherSpeed = value.toInt();
+                        });
+                      }
+                    : null,
+                onChangeEnd: isConnected
+                    ? (value) {
+                        setState(() {
+                          launcherSpeed = value.toInt();
+                        });
+                        writeCommandData();
+                      }
+                    : null,
+              ),
+              Text("Spin: $launcherSpin"),
+              Slider(
+                value: launcherSpin.toDouble(),
+                min: -10,
+                max: 10,
+                divisions: 20,
+                label: launcherSpin.toString(),
+                onChanged: isConnected
+                    ? (value) {
+                        setState(() {
+                          launcherSpin = value.toInt();
+                        });
+                      }
+                    : null,
+                onChangeEnd: isConnected
+                    ? (value) {
+                        setState(() {
+                          launcherSpin = value.toInt();
+                        });
+                        writeCommandData();
+                      }
+                    : null,
+              ),              
+            ],
+          ),
         ],
       ),
     );
   }
+
 }
