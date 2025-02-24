@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -56,14 +58,32 @@ class BluetoothOffScreen extends StatelessWidget {
 
   const BluetoothOffScreen({super.key, required this.adapterState});
 
+  bool get isEmulator {
+    if (kIsWeb) return false; // Web doesn't support Bluetooth
+    return !Platform.isAndroid && !Platform.isIOS; // Assume it's an emulator if not Android/iOS
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool bluetoothEnabled = isEmulator || adapterState == BluetoothAdapterState.on;
+
+    if (bluetoothEnabled) {
+      return const Scaffold(
+        body: Center(child: Text('Bluetooth is enabled (Emulator bypass active).')),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Bluetooth Off')),
       body: Center(
         child: Text('Bluetooth is ${adapterState == BluetoothAdapterState.off ? "off" : "unknown"}. Please enable it.'),
       ),
     );
+  }
+
+  Future<bool> isRunningOnEmulator() async {
+    final result = await Process.run('getprop', ['ro.boot.qemu']);
+    return result.stdout.toString().trim() == '1';
   }
 }
 
@@ -78,26 +98,31 @@ class _ScanScreenState extends State<ScanScreen> {
   final FlutterBluePlus flutterBlue = FlutterBluePlus();
   List<BluetoothDevice> devicesList = [];
   BluetoothDevice? connectedDevice;
-  BluetoothCharacteristic? targetCharacteristic;
+  BluetoothCharacteristic? commandCharacteristic;
+  BluetoothCharacteristic? dataCharacteristic;
   bool isScanning = false;
   bool isConnected = false;
 
   // Pitching settings with default values
   int launcherSpeed = 1; // Default: 1
   int launcherSpin = 0; // Default: 0
-  int feedDelay = 3; // Default: 3
-  int verticalAngle = 0; // Default: 15
-  int presetMode = 0;
+  int ballInterval = 3; // Default: 3
+  int verticalAngle = 3; // Default: 2
+  int horizontalAngle = 3; // Default: 2
   bool enableLauncher = false; // Default: false
+  bool enableVerticalSwing = false;
+  bool enableHorizontalSwing = false;
+  bool enableSequences = false;
+  final TextEditingController _csvController = TextEditingController();
 
-  // Timer to handle subscription timeout
-  Timer? _dataTimeoutTimer;
+  // // Timer to handle subscription timeout
+  // Timer? _dataTimeoutTimer;
   // Timer to handle connection check
   Timer? _connectionCheckTimer;
 
   @override
   void dispose() {
-    _dataTimeoutTimer?.cancel();
+    // _dataTimeoutTimer?.cancel();
     _connectionCheckTimer?.cancel();
     super.dispose();
   }
@@ -138,21 +163,28 @@ class _ScanScreenState extends State<ScanScreen> {
     BluetoothService? targetService;
     for (BluetoothService service in services) {
       for (BluetoothCharacteristic characteristic in service.characteristics) {
-        if (characteristic.uuid.toString() == "895ae96b-ebc6-4e31-9193-40a9ae4dd3d8") {
+        if (characteristic.uuid.toString() == "895ae96b-ebc6-4e31-9193-40a9ae4dd3d9") {
+          commandCharacteristic = characteristic;
+        }
+        else if (characteristic.uuid.toString() == "895ae96b-ebc6-4e31-9193-40a9ae4dd3a0")
+        {
+          dataCharacteristic = characteristic;
+        }
+
+        if (commandCharacteristic != null && dataCharacteristic != null) {
           targetService = service;
-          targetCharacteristic = characteristic;
           break;
         }
       }
       if (targetService != null) break;
     }
 
-    if (targetService != null && targetCharacteristic != null) {
-      await targetCharacteristic!.setNotifyValue(true);
+    if (targetService != null && dataCharacteristic != null) {
+      await dataCharacteristic!.setNotifyValue(true);
       
       try {
         // Read initial characteristic value
-        var initialValue = await targetCharacteristic!.read();
+        var initialValue = await dataCharacteristic!.read();
 
         if (initialValue.isNotEmpty && initialValue.length >= 6) {
           updateValuesFromData(Uint8List.fromList(initialValue));
@@ -170,26 +202,9 @@ class _ScanScreenState extends State<ScanScreen> {
         }
       }
 
-      // Set up a timeout to use default values if no data is received within 5 seconds
-      _dataTimeoutTimer = Timer(const Duration(seconds: 5), () {
-        setState(() {
-          // Revert to default values
-          launcherSpeed = 1;
-          launcherSpin = 0;
-          feedDelay = 3;
-          verticalAngle = 0;
-          enableLauncher = false;
-          presetMode = 0;
-        });
-        if (kDebugMode) {
-          print("No data received within timeout. Using default values.");
-        }
-      });
-
       // Subscribe to notifications
-      targetCharacteristic!.lastValueStream.listen((value) {
+      dataCharacteristic!.lastValueStream.listen((value) {
         if (value.isNotEmpty && value.length >= 6) {
-          _dataTimeoutTimer?.cancel(); // Data received, cancel the timeout
           updateValuesFromData(Uint8List.fromList(value));
         } else {
           if (kDebugMode) {
@@ -252,16 +267,19 @@ class _ScanScreenState extends State<ScanScreen> {
 
     setState(() {
       launcherSpeed = data[0];
-      launcherSpin = data[1] - 10;
-      feedDelay = data[2];
+      launcherSpin = data[1] - 5;
+      ballInterval = data[2];
       verticalAngle = data[3];
-      enableLauncher = data[4] == 1;
-      presetMode = data[5];
+      horizontalAngle = data[4];
+      enableLauncher = data[5] == 1;
+      enableVerticalSwing = data[6] == 1;
+      enableHorizontalSwing = data[7] == 1;
+      enableSequences = data[8] == 1;
     });
   }
 
   void disconnectDevice() async {
-    _dataTimeoutTimer?.cancel(); // Cancel any existing timeout
+    // _dataTimeoutTimer?.cancel(); // Cancel any existing timeout
     _connectionCheckTimer?.cancel();
     if (connectedDevice != null) {
       await connectedDevice!.disconnect();
@@ -275,160 +293,241 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
-  void writeCommandData() async {
-    if (targetCharacteristic != null) {
-      Uint8List data = Uint8List(6);
-      data[0] = launcherSpeed;
-      data[1] = launcherSpin + 10;
-      data[2] = feedDelay;
-      data[3] = verticalAngle;
-      data[4] = enableLauncher ? 1 : 0;
-      data[5] = presetMode;
-      await targetCharacteristic!.write(data);
-      if (kDebugMode) {
-        print("Command data written: $data");
-      }
+  void writeStringCommand(String command) async {
+  if (commandCharacteristic != null) {
+    Uint8List data = Uint8List.fromList(utf8.encode(command));
+    await commandCharacteristic!.write(data);
+    if (kDebugMode) {
+      print("String command written: $command");
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Tennis Machine Controller')),
-      body: Column(
-        children: <Widget>[
-          ElevatedButton(
-            onPressed: isConnected ? disconnectDevice : startScan,
-            child: Text(isConnected ? 'Disconnect' : 'Scan'),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: devicesList.isEmpty ? 1 : devicesList.length,
-              itemBuilder: (context, index) {
-                if (devicesList.isEmpty) {
-                  return const ListTile(
-                    title: Text('No devices found'),
-                  );
-                }
-                return ListTile(
-                  title: Text(devicesList[index].platformName.isNotEmpty
-                      ? devicesList[index].platformName
-                      : "Unknown Device"),
-                  subtitle: Text(devicesList[index].remoteId.toString()),
-                  onTap: () => connectToDevice(devicesList[index]),
-                );
-              },
+      body: SingleChildScrollView(
+        child: Column(
+          children: <Widget>[
+            ElevatedButton(
+              onPressed: isConnected ? disconnectDevice : startScan,
+              child: Text(isConnected ? 'Disconnect' : 'Scan'),
             ),
-          ),
-          Column(
-            children: [
-              SwitchListTile(
-                title: const Text('Start Machine'),
-                value: enableLauncher,
-                onChanged: isConnected
-                    ? (value) {
-                        setState(() {
-                          enableLauncher = value;
-                        });
-                        writeCommandData();
-                      }
-                    : null,
+            SizedBox(
+              height: 120, // Adjust the height as needed
+              child: ListView.builder(
+                itemCount: devicesList.isEmpty ? 1 : devicesList.length,
+                itemBuilder: (context, index) {
+                  if (devicesList.isEmpty) {
+                    return const ListTile(
+                      title: Text('No devices found'),
+                    );
+                  }
+                  return ListTile(
+                    title: Text(devicesList[index].platformName.isNotEmpty
+                        ? devicesList[index].platformName
+                        : "Unknown Device"),
+                    subtitle: Text(devicesList[index].remoteId.toString()),
+                    onTap: () => connectToDevice(devicesList[index]),
+                  );
+                },
               ),
-              Text("Elevation Pos: $verticalAngle"),
-              Slider(
-                value: verticalAngle.toDouble(),
-                min: 0,
-                max: 15,
-                divisions: 15,
-                label: verticalAngle.toString(),
-                onChanged: isConnected
-                    ? (value) {
-                        setState(() {
-                          verticalAngle = value.toInt();
-                        });
-                      }
-                    : null,
-                onChangeEnd: isConnected
-                    ? (value) {
-                        setState(() {
-                          verticalAngle = value.toInt();
-                        });
-                        writeCommandData();
-                      }
-                    : null,
-              ),
-              Text("Frequency: $feedDelay Sec"),
-              Slider(
-                value: feedDelay.toDouble(),
-                min: 1,
-                max: 10,
-                divisions: 9,
-                label: feedDelay.toString(),
-                onChanged: isConnected
-                    ? (value) {
-                        setState(() {
-                          feedDelay = value.toInt();
-                        });
-                      }
-                    : null,
-                onChangeEnd: isConnected
-                    ? (value) {
-                        setState(() {
-                          feedDelay = value.toInt();
-                        });
-                        writeCommandData();
-                      }
-                    : null,
-              ),
-              Text("Speed: $launcherSpeed%"),
-              Slider(
-                value: launcherSpeed.toDouble(),
-                min: 1,
-                max: 100,
-                divisions: 99,
-                label: launcherSpeed.toString(),
-                onChanged: isConnected
-                    ? (value) {
-                        setState(() {
-                          launcherSpeed = value.toInt();
-                        });
-                      }
-                    : null,
-                onChangeEnd: isConnected
-                    ? (value) {
-                        setState(() {
-                          launcherSpeed = value.toInt();
-                        });
-                        writeCommandData();
-                      }
-                    : null,
-              ),
-              Text("Spin: $launcherSpin"),
-              Slider(
-                value: launcherSpin.toDouble(),
-                min: -10,
-                max: 10,
-                divisions: 20,
-                label: launcherSpin.toString(),
-                onChanged: isConnected
-                    ? (value) {
-                        setState(() {
-                          launcherSpin = value.toInt();
-                        });
-                      }
-                    : null,
-                onChangeEnd: isConnected
-                    ? (value) {
-                        setState(() {
-                          launcherSpin = value.toInt();
-                        });
-                        writeCommandData();
-                      }
-                    : null,
-              ),              
-            ],
-          ),
-        ],
+            ),
+            Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Start Machine'),
+                  value: enableLauncher,
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            enableLauncher = value;
+                          });
+                          writeStringCommand("start#$enableLauncher");
+                        }
+                      : null,
+                ),
+                Text("Speed: $launcherSpeed%"),
+                Slider(
+                  value: launcherSpeed.toDouble(),
+                  min: 1,
+                  max: 100,
+                  divisions: 99,
+                  label: launcherSpeed.toString(),
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            launcherSpeed = value.toInt();
+                          });
+                        }
+                      : null,
+                  onChangeEnd: isConnected
+                      ? (value) {
+                          setState(() {
+                            launcherSpeed = value.toInt();
+                          });
+                          writeStringCommand("speed#$launcherSpeed,$launcherSpin");
+                        }
+                      : null,
+                ),
+                Text("Spin: $launcherSpin"),
+                Slider(
+                  value: launcherSpin.toDouble(),
+                  min: -5,
+                  max: 5,
+                  divisions: 10,
+                  label: launcherSpin.toString(),
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            launcherSpin = value.toInt();
+                          });
+                        }
+                      : null,
+                  onChangeEnd: isConnected
+                      ? (value) {
+                          setState(() {
+                            launcherSpin = value.toInt();
+                          });
+                          writeStringCommand("speed#$launcherSpeed,$launcherSpin");
+                        }
+                      : null,
+                ),
+                Text("Ball Interval: $ballInterval Sec"),
+                Slider(
+                  value: ballInterval.toDouble(),
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  label: ballInterval.toString(),
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            ballInterval = value.toInt();
+                          });
+                        }
+                      : null,
+                  onChangeEnd: isConnected
+                      ? (value) {
+                          setState(() {
+                            ballInterval = value.toInt();
+                          });
+                          writeStringCommand("interval#$ballInterval");
+                        }
+                      : null,
+                ),           
+                SwitchListTile(
+                  title: const Text('Oscillate Vertical'),
+                  value: enableVerticalSwing,
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            enableVerticalSwing = value;
+                          });
+                          writeStringCommand("vosc#$enableVerticalSwing");
+                        }
+                      : null,
+                ),
+                SwitchListTile(
+                  title: const Text('Oscillate Horizontal'),
+                  value: enableHorizontalSwing,
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            enableHorizontalSwing = value;
+                          });
+                          writeStringCommand("hosc#$enableHorizontalSwing");
+                        }
+                      : null,
+                ),
+                Text("Elevation Pos: $verticalAngle"),
+                Slider(
+                  value: verticalAngle.toDouble(),
+                  min: 0,
+                  max: 5,
+                  divisions: 5,
+                  label: verticalAngle.toString(),
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            verticalAngle = value.toInt();
+                          });
+                        }
+                      : null,
+                  onChangeEnd: isConnected
+                      ? (value) {
+                          setState(() {
+                            verticalAngle = value.toInt();
+                          });
+                          writeStringCommand("vpos#$verticalAngle");
+                        }
+                      : null,
+                ),
+                Text("Horizontal Pos: $horizontalAngle"),
+                Slider(
+                  value: horizontalAngle.toDouble(),
+                  min: 0,
+                  max: 5,
+                  divisions: 5,
+                  label: horizontalAngle.toString(),
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            horizontalAngle = value.toInt();
+                          });
+                        }
+                      : null,
+                  onChangeEnd: isConnected
+                      ? (value) {
+                          setState(() {
+                            horizontalAngle = value.toInt();
+                          });
+                          writeStringCommand("hpos#$horizontalAngle");
+                        }
+                      : null,
+                ),
+                
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: TextField(
+                    controller: _csvController,
+                    decoration: const InputDecoration(
+                      labelText: "Enter Sequences",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: isConnected
+                      ? () {
+                          String csvCommand = _csvController.text.trim();
+                          if (csvCommand.isNotEmpty) {
+                            writeStringCommand(csvCommand);
+                            _csvController.clear();
+                          }
+                        }
+                      : null,
+                  child: const Text("Send Command"),
+                ),
+                SwitchListTile(
+                  title: const Text('Start Sequences'),
+                  value: enableSequences,
+                  onChanged: isConnected
+                      ? (value) {
+                          setState(() {
+                            enableSequences = value;
+                          });
+                          writeStringCommand("seq#$enableSequences");
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
